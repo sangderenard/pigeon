@@ -1,6 +1,6 @@
 import numpy as np
 import pygame
-from collections import deque, defaultdict
+from collections import defaultdict
 from typing import List
 
 from color import normalize_weights, ColorMap
@@ -48,7 +48,6 @@ class PigeonVisualizer:
         self._init_gl()
         self.in_textures = [self._make_texture(min(job.input_bins, self.MAX_DISPLAY_WIDTH)) for job in self.jobs]
         self.out_textures = [self._make_texture(min(job.output_bins, self.MAX_DISPLAY_WIDTH)) for job in self.jobs]
-        self.feedback_buffer = deque()
         # Use results and job_manager from lab
         self.results = lab.results
         self.job_manager = lab.job_manager
@@ -159,18 +158,6 @@ class PigeonVisualizer:
                 change = True
             if change:
                 print(f"\rMin: {self.min_row_weight:.2f}, Max: {self.max_row_weight:.2f}, Gamma: {self.row_height_gamma:.2f}", end="")
-
-            # --- Feedback logic ---
-            if (self.num_jobs - 1) in self.results:
-                bins, _ = self.results[self.num_jobs - 1]
-                feedback_payloads = []
-                for bin_idx, bin_list in bins.items():
-                    for payload in bin_list:
-                        feedback_payloads.append((bin_idx, payload))
-                self.feedback_buffer.append(feedback_payloads)
-                if len(self.feedback_buffer) > self.feedback_delay_frames:
-                    delayed_payloads = self.feedback_buffer.popleft()
-                    self.jobs[0].source = iter(delayed_payloads)
 
             # --- Drawing Logic ---
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
