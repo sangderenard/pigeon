@@ -1,3 +1,8 @@
+from typing import Optional
+import logging
+import json
+
+
 class JobGraphNode:
     def __init__(self, job_obj, node_id, name: Optional[str] = None):
         self.job = job_obj
@@ -16,8 +21,6 @@ class JobGraphNode:
     @property
     def parents(self):
         return self.sources
-
-import json
 
 class JobGraph:
     def __init__(self, trace=False):
