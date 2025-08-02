@@ -10,39 +10,10 @@ import pandas as pd
 
 from graph import JobGraph, JobGraphNode
 from payload import PigeonTapePayload
-from pigeon import PigeonCrusher, append_hue_to_tape
-from pigeon_core.logging import get_logger, TRACE
-from pigeon_crusher_helper import PigeonCrushKernelHelper
+from kernel import PigeonCrusher, append_hue_to_tape, PigeonCrushKernelHelper
+from pigeon_logging import get_logger, TRACE
 
 logger = get_logger("mapping_job")
-
-class PipelineStageBase:
-    def __init__(self):
-        self.sources = []
-        self.sinks = []
-        self.in_buffer = []
-        self.out_buffer = []
-    def set_source(self, src):
-        self.sources.append(src)
-    def set_sink(self, sink):
-        self.sinks.append(sink)
-    def sink(self):
-        """Default sink method, can be overridden by subclasses. assumes 
-        items in sinks are all queues that can directly be put() into."""
-        for s in self.sinks:
-            for i in range(len(self.out_buffer)):
-                s.put(self.out_buffer[i])  # Pop from buffer and put into each sink
-    def source(self):
-        """Default source method, can be overridden by subclasses. assumes
-        items in sources are all queues that can directly be get() from."""
-        for s in self.sources:
-            patience = 10  # wait for up to 10 items
-            while not s.empty() and patience > 0:
-                old_len = len(self.in_buffer)
-                self.in_buffer.append(s.get_nowait())
-                if len(self.in_buffer) == old_len:
-                    patience -= 1
-
 
 
 class JobJoiner:
@@ -321,32 +292,35 @@ class HistogramGatherStage(PipelineStageBase):
 
 
 class JobManager(threading.Thread):
-    def __init__(self, jobs: List[MappingJob], results: Dict[int, Tuple[List[List[PigeonTapePayload]], pd.DataFrame]]):
+    def __init__(
+        self,
+        jobs: List[MappingJob],
+        results: Dict[int, Tuple[Dict[int, List[PigeonTapePayload]], pd.DataFrame]],
+    ):
         super().__init__()
         self.jobs = jobs
         self.results = results
-        self.asap = jobs.asap if hasattr(jobs, 'asap') else True
-
-
 
     def run(self):
-        """
-        Continuously process jobs in a loop. This is suitable for a pipeline
-        with a feedback loop where jobs will be ready to process data repeatedly.
-        """
+        """Continuously process jobs and route outputs to the next job."""
         while True:
             processed_in_cycle = False
             for i, job in enumerate(self.jobs):
                 try:
                     res, df = job.step()
                     self.results[i] = (res, df)
+                    next_job = self.jobs[(i + 1) % len(self.jobs)]
+                    for dst_idx, payloads in res.items():
+                        for payload in payloads:
+                            next_job.source.put((dst_idx, payload))
                     processed_in_cycle = True
                     if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug(f"Layer {i}: completed cycle with {df.shape[0]} mappings.")
+                        logger.debug(
+                            f"Layer {i}: completed cycle with {df.shape[0]} mappings."
+                        )
                     if logger.isEnabledFor(TRACE):
                         logger.trace(f"LAYER {i} DF:\n{df}")
                 except StopIteration:
                     pass
-            # Removed time.sleep to prevent any blocking
             if not processed_in_cycle:
                 time.sleep(0.01)

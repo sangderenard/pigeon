@@ -1,5 +1,4 @@
 from typing import Any, Optional, List
-import ctypes
 
 class PigeonTapePayload:
     def __init__(self, value: Any, origin_bin: int, tape: Optional[List[float]] = None, bin_path: Optional[List[int]] = None):
@@ -36,26 +35,3 @@ class PigeonTapePayload:
 
     def __repr__(self):
         return f"<PigeonTapePayload val={self.value} tape={self.tape} bins={self.bin_path}>"
-
-class TapeFrame(ctypes.Structure):
-    _fields_ = [
-        ('hue', ctypes.c_float),
-        ('painter', ctypes.c_uint32),
-    ]
-
-    def __repr__(self):
-        return f"TapeFrame(hue={self.hue}, painter={self.painter})"
-
-MAX_PAINT_UNITS = 64
-
-class TapeHeaderEntry(ctypes.Structure):
-    _fields_ = [
-        ('painter_id', ctypes.c_uint32),
-        ('desc_offset', ctypes.c_uint32),
-    ]
-
-class TapeHeaderFrame(ctypes.Structure):
-    _fields_ = [
-        ('count', ctypes.c_uint32),
-        ('entries', TapeHeaderEntry * MAX_PAINT_UNITS),
-    ]

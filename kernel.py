@@ -1,7 +1,99 @@
 import math
 import random
+from typing import Any, Callable, Iterator, List, Optional, Tuple
 
 from scipy import stats
+
+from color import ColorMap
+from payload import PigeonTapePayload
+from pigeon_logging import get_logger, TRACE
+
+logger = get_logger("pigeonkernel", level=TRACE)
+
+
+def append_hue_to_tape_in_place(item: Tuple[int, PigeonTapePayload], hue: float) -> Tuple[int, PigeonTapePayload]:
+    idx, payload = item
+    payload.tape.append(hue)
+    return idx, payload
+
+
+def append_hue_to_tape(item: Tuple[int, PigeonTapePayload], hue: float) -> Tuple[int, PigeonTapePayload]:
+    idx, payload = item
+    new_tape = payload.tape + [hue]
+    logger.trace(
+        f"TAPE CLONE/APPEND: Appended hue {hue:.3f} to tape from {payload.tape}. New tape: {new_tape}"
+    )
+    new_payload = PigeonTapePayload(payload.value, payload.origin_bin, new_tape, payload.bin_path[:])
+    return idx, new_payload
+
+
+class PigeonCrusher:
+    @staticmethod
+    def get_hues(
+        count: int,
+        exclusion: float = 0.125,
+        margin: float = 0.07,
+        gamma: float = 0.8,
+        mode: str = "rainbow",
+    ) -> List[float]:
+        try:
+            if exclusion is not None and margin == 0.07:
+                margin = exclusion
+            if count <= 0:
+                raise ValueError("Count must be a positive integer")
+            logger.trace(
+                f"Generating {count} hues with mode='{mode}', margin={margin:.3f}, gamma={gamma:.2f}"
+            )
+            cmap = ColorMap(count, margin=margin, gamma=gamma, mode=mode)
+            hues = cmap.hues()
+            return hues
+        except ValueError as e:
+            logger.error(f"Invalid parameters for ColorMap: {e}")
+            ε = exclusion
+            if count == 1:
+                return [0.5]
+            return [ε + (1 - 2 * ε) * i / (count - 1) for i in range(count)]
+
+    @staticmethod
+    def dummy_payloads(
+        bins: int,
+        count: int,
+        value: Any = None,
+        exclusion: float = 0.125,
+        t_fn: Optional[Callable[[], float]] = None,
+    ) -> Iterator[Tuple[int, PigeonTapePayload]]:
+        logger.trace(f"Generating {count} dummy payloads for {bins} bins.")
+        hues = PigeonCrusher.get_hues(bins, exclusion)
+        per_bin = count // bins
+        idx = 0
+        while idx < bins * per_bin:
+            bin_idx = idx % bins
+            initial_tape = [hues[bin_idx]]
+            logger.trace(
+                f"TAPE INIT: Dummy payload for bin {bin_idx} created with tape: {initial_tape}"
+            )
+            yield (
+                bin_idx,
+                PigeonTapePayload(value, origin_bin=bin_idx, tape=initial_tape, bin_path=[bin_idx]),
+            )
+            idx += 1
+            if t_fn:
+                import time
+                time.sleep(t_fn())
+        for bin_idx in range(count % bins):
+            initial_tape = [hues[bin_idx]]
+            logger.trace(
+                f"TAPE INIT: Dummy payload for bin {bin_idx} created with tape: {initial_tape}"
+            )
+            yield (
+                bin_idx,
+                PigeonTapePayload(
+                    value, origin_bin=bin_idx, tape=[hues[bin_idx]], bin_path=[bin_idx]
+                ),
+            )
+            if t_fn:
+                import time
+                time.sleep(t_fn())
 
 class PigeonCrushKernelHelper:
     """
