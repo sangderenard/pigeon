@@ -1,3 +1,20 @@
+import numpy as np
+import pygame
+from collections import deque, defaultdict
+from typing import List
+
+from color import normalize_weights, ColorMap
+from ring_lab import PigeonRingLab
+from OpenGL.GL import (
+    glGenTextures, glBindTexture, glTexParameteri, glTexImage2D, glTexSubImage2D,
+    glBegin, glEnd, glTexCoord2f, glVertex2f, glClear, glClearColor, glViewport,
+    glLoadIdentity, glOrtho, glMatrixMode, glEnable,
+    GL_TEXTURE_2D, GL_RGBA, GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE,
+    GL_QUADS, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_TEXTURE_MIN_FILTER,
+    GL_TEXTURE_MAG_FILTER, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_PROJECTION,
+    GL_MODELVIEW, GL_NEAREST,
+)
+
 
 class PigeonVisualizer:
     def __init__(

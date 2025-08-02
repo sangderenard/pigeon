@@ -1,4 +1,12 @@
 
+from collections import deque, defaultdict
+import queue
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+
+from payload import PigeonTapePayload
+from mapping_job import MappingJob
+
+
 class PigeonCrushedBase:
     """
     Mixin/base for crushed primitives.
@@ -185,9 +193,6 @@ class CrushList(PigeonCrushedBase, list):
 
     def __repr__(self):
         return f"CrushList({list(self)})"
-from collections import deque, defaultdict
-import numpy as np
-from pigeon_crushing import MappingJob  # Use your real import
 
 class CrushDict(PigeonCrushedBase, dict):
     """
