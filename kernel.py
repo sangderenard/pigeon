@@ -1,5 +1,6 @@
 import math
 import random
+from collections import deque
 from typing import Any, Callable, Iterator, List, Optional, Tuple
 
 from scipy import stats
@@ -27,7 +28,77 @@ def append_hue_to_tape(item: Tuple[int, PigeonTapePayload], hue: float) -> Tuple
     return idx, new_payload
 
 
+
+class StoichiometricDecider:
+    """Nearest quantization with stochastic ownership of exact midpoints.
+
+    Values strictly nearer one integer go there deterministically. An exact
+    half-step is a real partition boundary, so neither neighbor owns it.
+    Boundary collisions are resolved probabilistically, with a short rolling
+    history gently biasing the next collision toward the underrepresented side.
+
+    `channel` gives independent callers independent histories. `rng` may be
+    supplied for reproducible compilation or simulation.
+    """
+
+    _histories = {}
+
+    @classmethod
+    def reset(cls, channel=None):
+        if channel is None:
+            cls._histories.clear()
+        else:
+            cls._histories.pop(channel, None)
+
+    @classmethod
+    def round(cls, value, *, channel="default", history=64, rng=None):
+        x = float(value)
+        if not math.isfinite(x):
+            raise ValueError(f"cannot quantize non-finite value {value!r}")
+
+        lower = math.floor(x)
+        upper = math.ceil(x)
+        if lower == upper:
+            return int(lower)
+
+        lower_distance = x - lower
+        upper_distance = upper - x
+        if lower_distance < upper_distance:
+            return int(lower)
+        if upper_distance < lower_distance:
+            return int(upper)
+
+        # Exact midpoint: the quantizer is discontinuous here. Resolve the
+        # collision stochastically rather than assigning the boundary by
+        # parity or direction. The rolling population acts like a tiny
+        # stoichiometric reservoir: whichever side has received less mass gets
+        # proportionally more probability on the next collision.
+        window = max(1, int(history))
+        decisions = cls._histories.get(channel)
+        if decisions is None or decisions.maxlen != window:
+            decisions = deque(
+                () if decisions is None else decisions,
+                maxlen=window,
+            )
+            cls._histories[channel] = decisions
+
+        upper_count = sum(decisions)
+        lower_count = len(decisions) - upper_count
+        probability_upper = (lower_count + 1) / (len(decisions) + 2)
+
+        generator = rng or random
+        choose_upper = generator.random() < probability_upper
+        decisions.append(1 if choose_upper else 0)
+        return int(upper if choose_upper else lower)
+
+
 class PigeonCrusher:
+    @staticmethod
+    def round(value, *, channel="default", history=64, rng=None):
+        """Round through the shared pigeon boundary-collision decider."""
+        return StoichiometricDecider.round(
+            value, channel=channel, history=history, rng=rng,
+        )
     @staticmethod
     def get_hues(
         count: int,
